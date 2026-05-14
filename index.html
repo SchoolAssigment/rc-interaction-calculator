@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RC Column Interaction Calculator</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>RC Column Interaction Calculator</h1>
+        <p>Rectangular stress-block method for uniaxial NRd-MRd interaction curves.</p>
+      </div>
+      <div class="status">
+        <span>Compression +</span>
+        <span>Tension -</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel controls">
+        <h2>Geometry</h2>
+        <div class="grid two">
+          <label>Width b (mm)<input id="width" type="number" value="300" min="1"></label>
+          <label>Height h (mm)<input id="height" type="number" value="500" min="1"></label>
+          <label>Bar diameter (mm)<input id="barDiameter" type="number" value="20" min="1"></label>
+        </div>
+        <div class="layer-head">
+          <h3>Rebar layers</h3>
+          <button id="addLayerBtn" type="button">Add Layer</button>
+        </div>
+        <div id="layersList" class="layers-list"></div>
+
+        <h2>Materials</h2>
+        <div class="grid two">
+          <label>fck (MPa)<input id="fck" type="number" value="35" min="1"></label>
+          <label>fyk (MPa)<input id="fyk" type="number" value="400" min="1"></label>
+          <label>gamma c<input id="gammaC" type="number" value="1.5" min="0.1" step="0.01"></label>
+          <label>gamma s<input id="gammaS" type="number" value="1.15" min="0.1" step="0.01"></label>
+          <label>eta cc<input id="etaCc" type="number" value="1.0" min="0" step="0.01"></label>
+          <label>k tc<input id="kTc" type="number" value="1.0" min="0" step="0.01"></label>
+          <label>Es (MPa)<input id="es" type="number" value="200000" min="1"></label>
+          <label>epsilon cu (per mille)<input id="epsCu" type="number" value="3.5" min="0.01" step="0.01"></label>
+          <label>lambda<input id="lambdaBlock" type="number" value="0.8" min="0.01" max="1" step="0.01"></label>
+          <label>Curve samples<input id="curveSamples" type="number" value="90" min="16" step="1"></label>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <section class="panel mode-panel">
+          <h2>Point Calculator</h2>
+          <div class="segmented">
+            <label><input type="radio" name="pointMode" value="strain" checked>Bottom epsilon</label>
+            <label><input type="radio" name="pointMode" value="x">Neutral axis x</label>
+            <label><input type="radio" name="pointMode" value="compression">Pure compression</label>
+            <label><input type="radio" name="pointMode" value="tension">Pure tension</label>
+          </div>
+          <div class="grid three">
+            <label id="bottomStrainGroup">Bottom tensile strain (per mille)<input id="bottomStrain" type="number" value="1.739" min="0" step="0.001"></label>
+            <label id="neutralAxisGroup" hidden>Neutral axis x (mm)<input id="neutralAxis" type="number" value="300.6" min="0.1" step="0.1"></label>
+            <button id="sampleBtn" type="button">Use epsilon yd</button>
+          </div>
+        </section>
+
+        <section class="panel demand-panel">
+          <h2>Design Action</h2>
+          <div class="grid three">
+            <label>Axial force NEd (kN)<input id="nEd" type="number" value="560.2" step="0.1"></label>
+            <label>Moment MEd (kNm)<input id="mEd" type="number" value="384.6" step="0.1"></label>
+            <div id="demandStatus" class="demand-status">-</div>
+          </div>
+        </section>
+
+        <section class="results-strip">
+          <div><span>NRd</span><strong id="nOut">-</strong></div>
+          <div><span>MRd</span><strong id="mOut">-</strong></div>
+          <div><span>x</span><strong id="xOut">-</strong></div>
+          <div><span>a = lambda x</span><strong id="aOut">-</strong></div>
+          <div><span>Cc</span><strong id="ccOut">-</strong></div>
+        </section>
+
+        <div id="warningBox" class="warning" hidden></div>
+
+        <section class="split">
+          <div class="panel chart-panel">
+            <h2>Interaction Curve</h2>
+            <canvas id="chart"></canvas>
+          </div>
+          <div class="panel section-panel">
+            <h2>Section</h2>
+            <svg id="sectionSvg" viewBox="0 0 260 320" aria-label="Column section preview"></svg>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Design Values</h2>
+          <div class="facts">
+            <div><span>fcd</span><strong id="fcdOut">-</strong></div>
+            <div><span>fyd</span><strong id="fydOut">-</strong></div>
+            <div><span>epsilon yd</span><strong id="epsYOut">-</strong></div>
+            <div><span>As layer</span><strong id="asOut">-</strong></div>
+          </div>
+          <p id="concreteLine" class="formula"></p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Layer</th>
+                  <th>z from top mm</th>
+                  <th>Bars</th>
+                  <th>As mm2</th>
+                  <th>epsilon per mille</th>
+                  <th>fs MPa</th>
+                  <th>Fs kN</th>
+                  <th>Lever m</th>
+                  <th>Moment kNm</th>
+                </tr>
+              </thead>
+              <tbody id="steelBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="export-head">
+            <h2>Curve Data</h2>
+            <button id="copyBtn" type="button">Copy CSV</button>
+          </div>
+          <textarea id="csvOut" readonly spellcheck="false"></textarea>
+        </section>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

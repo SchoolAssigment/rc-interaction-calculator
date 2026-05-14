@@ -1,0 +1,29 @@
+# Netlify Configuration for RC Interaction Calculator
+# Static site - no build step required
+
+[build]
+# Publish directory: root folder (all files are static assets)
+publish = "."
+
+# No build command needed - all files are served as-is
+command = ""
+
+# Environment variables (if needed in future)
+[build.environment]
+
+# Redirects for single-page app (if needed in future)
+# [[redirects]]
+# from = "/*"
+# to = "/"
+# status = 200
+
+# Headers for performance optimization
+[[headers]]
+for = "/*"
+[headers.values]
+Cache-Control = "public, max-age=3600"
+
+[[headers]]
+for = "/*.html"
+[headers.values]
+Cache-Control = "public, max-age=0, must-revalidate"
