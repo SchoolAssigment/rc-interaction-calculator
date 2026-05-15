@@ -11,7 +11,7 @@ This is a local calculator for the lecture example on rectangular reinforced-con
 - Steel stress from linear strain compatibility, capped at `+/- fyd`
 - Axial resistance `NRd` and centroid moment `MRd`
 - Independent rebar layers, so each layer can have a different depth and bar count
-- A design action point `NEd, MEd` plotted on the interaction curve
+- Design action cases (`NEd`, `MEd`) plotted on the interaction curve
 
 Compression is positive and tension is negative. Enter `NEd` as positive for compression. The chart plots `abs(MEd)` for the uniaxial interaction check. The moment is calculated about the gross-section centroid, matching the lecture screenshots.
 

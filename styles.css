@@ -168,9 +168,51 @@ button {
   margin: 18px 0 10px;
 }
 
+.demand-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
 .layer-head button,
 .layer-row button {
   height: 34px;
+}
+
+.demand-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.demand-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(170px, 1fr) minmax(210px, 1.2fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.demand-row label {
+  font-size: 12px;
+}
+
+.demand-title {
+  grid-column: 1 / -1;
+  color: var(--ink);
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.demand-row button {
+  height: 34px;
+  color: #9f1239;
+  background: #ffe4e6;
 }
 
 .layers-list {
@@ -211,6 +253,12 @@ button {
   cursor: not-allowed;
 }
 
+.demand-row button:disabled {
+  color: #94a3b8;
+  background: #e2e8f0;
+  cursor: not-allowed;
+}
+
 .segmented {
   display: flex;
   flex-wrap: wrap;
@@ -236,6 +284,12 @@ button {
   border-radius: 8px;
   background: #f8fafc;
   color: var(--muted);
+}
+
+.demand-status--row {
+  min-height: 50px;
+  padding: 8px 10px;
+  font-size: 12px;
 }
 
 .demand-status strong,
@@ -434,6 +488,10 @@ textarea {
   .three,
   .facts,
   .results-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .demand-row {
     grid-template-columns: 1fr;
   }
 
