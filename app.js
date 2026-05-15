@@ -670,8 +670,7 @@ $("demandList").addEventListener("click", (event) => {
   update();
 });
 $("addDemandBtn").addEventListener("click", () => {
-  const lastRow = demandRows[demandRows.length - 1] || { n: 0, m: 0 };
-  demandRows.push({ n: lastRow.n, m: lastRow.m });
+  demandRows.push({ n: 0, m: 0 });
   renderDemandEditor();
   update();
 });
