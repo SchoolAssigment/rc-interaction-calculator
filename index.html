@@ -64,12 +64,12 @@
         </section>
 
         <section class="panel demand-panel">
-          <h2>Design Action</h2>
-          <div class="grid three">
-            <label>Axial force NEd (kN)<input id="nEd" type="number" value="560.2" step="0.1"></label>
-            <label>Moment MEd (kNm)<input id="mEd" type="number" value="384.6" step="0.1"></label>
-            <div id="demandStatus" class="demand-status">-</div>
+          <div class="demand-head">
+            <h2>Design Action</h2>
+            <button id="addDemandBtn" type="button">Add Row</button>
           </div>
+          <div id="demandSummary" class="demand-status">-</div>
+          <div id="demandList" class="demand-list"></div>
         </section>
 
         <section class="results-strip">

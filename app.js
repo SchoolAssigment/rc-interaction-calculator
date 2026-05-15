@@ -6,9 +6,13 @@ let rebarLayers = [
   { z: 450, bars: 2 }
 ];
 
+let demandRows = [
+  { n: 560.2, m: 384.6 }
+];
+
 const inputs = [
   "width", "height", "barDiameter", "fck", "fyk", "gammaC", "gammaS", "etaCc", "kTc", "es",
-  "epsCu", "lambdaBlock", "neutralAxis", "bottomStrain", "curveSamples", "nEd", "mEd"
+  "epsCu", "lambdaBlock", "neutralAxis", "bottomStrain", "curveSamples"
 ];
 
 function numberValue(id) {
@@ -172,8 +176,9 @@ function update() {
   const mat = material();
   const point = activePoint(sec, mat);
   const curve = curvePoints(sec, mat);
-  const demand = demandPoint();
-  const demandCheck = checkDemandInsideCurve(curve, demand);
+  const demands = demandPoints();
+  const demandChecks = demands.map((demand) => checkDemandInsideCurve(curve, demand));
+  const demandSummary = summarizeDemandChecks(demandChecks);
   const warnings = validate(sec, mat, point);
 
   $("fcdOut").textContent = `${fmt(mat.fcd, 2)} MPa`;
@@ -186,23 +191,28 @@ function update() {
   $("xOut").textContent = point.x ? `${fmt(point.x, 1)} mm` : "-";
   $("aOut").textContent = `${fmt(point.a, 1)} mm`;
   $("ccOut").textContent = `${fmt(point.concreteForce, 1)} kN`;
-  renderDemandStatus(demandCheck);
+  renderDemandSummary(demandSummary);
+  updateDemandStatuses(demandChecks);
   $("warningBox").textContent = warnings.join(" ");
   $("warningBox").hidden = warnings.length === 0;
 
   renderSection(sec);
   renderTable(point);
-  renderChart(curve, point, demand, demandCheck);
+  renderChart(curve, point, demands, demandChecks);
   renderCsv(curve);
   updateModeVisibility();
 }
 
-function demandPoint() {
-  return {
-    n: numberValue("nEd"),
-    m: numberValue("mEd"),
-    absM: Math.abs(numberValue("mEd"))
-  };
+function demandPoints() {
+  return demandRows.map((row) => {
+    const n = Number(row.n);
+    const m = Number(row.m);
+    return {
+      n,
+      m,
+      absM: Math.abs(m)
+    };
+  });
 }
 
 function checkDemandInsideCurve(curve, demand) {
@@ -243,17 +253,62 @@ function checkDemandInsideCurve(curve, demand) {
   };
 }
 
-function renderDemandStatus(check) {
-  const el = $("demandStatus");
-  el.classList.toggle("is-ok", check.inside);
-  el.classList.toggle("is-fail", !check.inside);
-  const range = check.nMin === null
-    ? "No capacity range"
-    : `Capacity at MEd: ${fmt(check.nMin, 1)} to ${fmt(check.nMax, 1)} kN`;
-  const utilization = Number.isFinite(check.utilization)
-    ? `Util. ${fmt(check.utilization * 100, 1)}%`
-    : "Util. -";
-  el.innerHTML = `<strong>${check.inside ? "Inside curve" : "Outside curve"}</strong><span>${range}</span><span>${utilization}</span>`;
+function summarizeDemandChecks(checks) {
+  const total = checks.length;
+  if (total === 0) {
+    return {
+      inside: false,
+      insideCount: 0,
+      total: 0,
+      maxUtilization: null
+    };
+  }
+  const insideCount = checks.filter((check) => check.inside).length;
+  const utilizations = checks.map((check) => check.utilization).filter(Number.isFinite);
+  return {
+    inside: insideCount === total,
+    insideCount,
+    total,
+    maxUtilization: utilizations.length ? Math.max(...utilizations) : null
+  };
+}
+
+function renderDemandSummary(summary) {
+  const el = $("demandSummary");
+  if (summary.total === 0) {
+    el.classList.remove("is-ok", "is-fail");
+    el.innerHTML = "<strong>No design actions</strong><span>Add at least one row.</span>";
+    return;
+  }
+  el.classList.toggle("is-ok", summary.inside);
+  el.classList.toggle("is-fail", !summary.inside);
+  const utilization = summary.maxUtilization !== null
+    ? `Max util. ${fmt(summary.maxUtilization * 100, 1)}%`
+    : "Max util. -";
+  el.innerHTML = `<strong>${summary.inside ? "All inside curve" : "Outside curve"}</strong><span>${summary.insideCount} of ${summary.total} cases inside</span><span>${utilization}</span>`;
+}
+
+function updateDemandStatuses(checks) {
+  $("demandList").querySelectorAll(".demand-row").forEach((row) => {
+    const index = Number(row.dataset.demandIndex);
+    const status = row.querySelector("[data-demand-status]");
+    const check = checks[index];
+    if (!status) return;
+    if (!check) {
+      status.textContent = "-";
+      status.classList.remove("is-ok", "is-fail");
+      return;
+    }
+    status.classList.toggle("is-ok", check.inside);
+    status.classList.toggle("is-fail", !check.inside);
+    const range = check.nMin === null
+      ? "No capacity range"
+      : `Capacity at MEd: ${fmt(check.nMin, 1)} to ${fmt(check.nMax, 1)} kN`;
+    const utilization = Number.isFinite(check.utilization)
+      ? `Util. ${fmt(check.utilization * 100, 1)}%`
+      : "Util. -";
+    status.innerHTML = `<strong>${check.inside ? "Inside curve" : "Outside curve"}</strong><span>${range}</span><span>${utilization}</span>`;
+  });
 }
 
 function validate(sec, mat, point) {
@@ -349,7 +404,23 @@ function renderLayersEditor() {
   `).join("");
 }
 
-function renderChart(curve, point, demand, demandCheck) {
+function renderDemandEditor() {
+  $("demandList").innerHTML = demandRows.map((row, index) => `
+    <div class="demand-row" data-demand-index="${index}">
+      <div class="demand-title">Case ${index + 1}</div>
+      <label>Axial force NEd (kN)
+        <input class="demand-n" type="number" value="${row.n}" step="0.1">
+      </label>
+      <label>Moment MEd (kNm)
+        <input class="demand-m" type="number" value="${row.m}" step="0.1">
+      </label>
+      <div class="demand-status demand-status--row" data-demand-status>-</div>
+      <button class="remove-demand" type="button" ${demandRows.length === 1 ? "disabled" : ""}>Remove</button>
+    </div>
+  `).join("");
+}
+
+function renderChart(curve, point, demands, demandChecks) {
   const canvas = $("chart");
   const ctx = canvas.getContext("2d");
   const ratio = window.devicePixelRatio || 1;
@@ -361,7 +432,8 @@ function renderChart(curve, point, demand, demandCheck) {
   ctx.clearRect(0, 0, cssWidth, cssHeight);
 
   const pad = { left: 68, right: 24, top: 28, bottom: 48 };
-  const all = [...curve, point, { m: demand.absM, n: demand.n }];
+  const demandPoints = demands.map((demand) => ({ m: demand.absM, n: demand.n }));
+  const all = [...curve, point, ...demandPoints];
   const maxMRaw = Math.max(...all.map((p) => Math.abs(p.m)), 1);
   const minNRaw = Math.min(...all.map((p) => p.n));
   const maxNRaw = Math.max(...all.map((p) => p.n));
@@ -447,29 +519,25 @@ function renderChart(curve, point, demand, demandCheck) {
   ctx.textAlign = "left";
   ctx.fillText(label, labelX + 8, labelY);
 
-  const demandX = xMap(demand.absM);
-  const demandY = yMap(demand.n);
-  ctx.strokeStyle = demandCheck.inside ? "#12805c" : "#b42318";
-  ctx.fillStyle = "#ffffff";
-  ctx.lineWidth = 2.2;
-  ctx.beginPath();
-  ctx.rect(demandX - 6, demandY - 6, 12, 12);
-  ctx.fill();
-  ctx.stroke();
+  demands.forEach((demand, index) => {
+    const demandX = xMap(demand.absM);
+    const demandY = yMap(demand.n);
+    const check = demandChecks[index];
+    const ok = check ? check.inside : false;
+    ctx.strokeStyle = ok ? "#12805c" : "#b42318";
+    ctx.fillStyle = "#ffffff";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.rect(demandX - 6, demandY - 6, 12, 12);
+    ctx.fill();
+    ctx.stroke();
 
-  const demandLabel = `Ed N ${fmt(demand.n, 0)}, M ${fmt(demand.m, 0)}`;
-  const demandWidth = ctx.measureText(demandLabel).width + 16;
-  const demandLabelX = Math.min(Math.max(demandX + 10, pad.left), pad.left + plotW - demandWidth);
-  const demandLabelY = Math.min(Math.max(demandY + 22, pad.top + 16), pad.top + plotH - 14);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
-  ctx.strokeStyle = demandCheck.inside ? "#bbf7d0" : "#fecaca";
-  ctx.lineWidth = 1;
-  roundRect(ctx, demandLabelX, demandLabelY - 13, demandWidth, 26, 6);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = demandCheck.inside ? "#166534" : "#991b1b";
-  ctx.textAlign = "left";
-  ctx.fillText(demandLabel, demandLabelX + 8, demandLabelY);
+    ctx.fillStyle = ok ? "#166534" : "#991b1b";
+    ctx.font = "11px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(index + 1), demandX, demandY);
+  });
 }
 
 function drawLegend(ctx, x, y) {
@@ -498,7 +566,7 @@ function drawLegend(ctx, x, y) {
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = "#475569";
-  ctx.fillText("MEd, NEd", x + 42, y + 40);
+  ctx.fillText("Design actions", x + 42, y + 40);
   ctx.restore();
 }
 
@@ -582,6 +650,31 @@ $("addLayerBtn").addEventListener("click", () => {
   renderLayersEditor();
   update();
 });
+$("demandList").addEventListener("input", (event) => {
+  const row = event.target.closest(".demand-row");
+  if (!row) return;
+  const index = Number(row.dataset.demandIndex);
+  if (event.target.classList.contains("demand-n")) {
+    demandRows[index].n = Number(event.target.value);
+  }
+  if (event.target.classList.contains("demand-m")) {
+    demandRows[index].m = Number(event.target.value);
+  }
+  update();
+});
+$("demandList").addEventListener("click", (event) => {
+  if (!event.target.classList.contains("remove-demand") || demandRows.length === 1) return;
+  const row = event.target.closest(".demand-row");
+  demandRows.splice(Number(row.dataset.demandIndex), 1);
+  renderDemandEditor();
+  update();
+});
+$("addDemandBtn").addEventListener("click", () => {
+  const lastRow = demandRows[demandRows.length - 1] || { n: 0, m: 0 };
+  demandRows.push({ n: lastRow.n, m: lastRow.m });
+  renderDemandEditor();
+  update();
+});
 $("sampleBtn").addEventListener("click", () => {
   const mat = material();
   $("bottomStrain").value = mat.epsY.toFixed(3);
@@ -595,4 +688,5 @@ $("copyBtn").addEventListener("click", async () => {
 });
 
 renderLayersEditor();
+renderDemandEditor();
 update();
