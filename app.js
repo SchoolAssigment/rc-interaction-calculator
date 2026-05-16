@@ -7,7 +7,7 @@ let rebarLayers = [
 ];
 
 let demandRows = [
-  { n: 560.2, m: 384.6 }
+  { n: 100, m: 30 }
 ];
 
 const inputs = [
@@ -105,8 +105,10 @@ function layerResult(sec, mat, index, z, strain, stress) {
   const area = layer.area;
   const force = area * stress / 1000;
   const lever = (sec.height / 2 - z) / 1000;
+  const label = `S${sec.layers.length - index}`;
   return {
     layer: index + 1,
+    label,
     z,
     bars: layer.bars,
     area,
@@ -196,7 +198,7 @@ function update() {
   $("warningBox").textContent = warnings.join(" ");
   $("warningBox").hidden = warnings.length === 0;
 
-  renderSection(sec);
+  renderSection(sec, point);
   renderTable(point);
   renderChart(curve, point, demands, demandChecks);
   renderCsv(curve);
@@ -342,7 +344,7 @@ function updateModeVisibility() {
 function renderTable(point) {
   const rows = point.steelLayers.map((layer) => `
     <tr>
-      <td>S${layer.layer}</td>
+      <td>${layer.label}</td>
       <td>${fmt(layer.z, 1)}</td>
       <td>${layer.bars}</td>
       <td>${fmt(layer.area, 1)}</td>
@@ -364,14 +366,50 @@ function renderTable(point) {
     `sum Ms = ${fmt(steelMoment, 2)} kNm; MRd = ${fmt(point.m, 2)} kNm.`;
 }
 
-function renderSection(sec) {
+function renderSection(sec, point) {
   const svg = $("sectionSvg");
-  const pad = 22;
-  const w = 180;
-  const h = 260;
+  const pad = 52;
+  const w = 170;
+  const h = 252;
   const scaleY = h / sec.height;
   const scaleX = w / sec.width;
   const sideInset = Math.min(50, sec.width * 0.22);
+  const barDiameterLabel = Number.isInteger(sec.barDiameter) ? sec.barDiameter : fmt(sec.barDiameter, 1);
+  const sectionLabelX = pad + w + 18;
+  const strainAxisX = 382;
+  const strainPanelX = 308;
+  const blockX = 568;
+  const forceAxisX = 760;
+  const guideEndX = 884;
+  const topLineY = pad;
+  const bottomLineY = pad + h;
+  const maxLayerStrain = Math.max(...point.steelLayers.map((layer) => Math.abs(layer.strain)), 0);
+  const maxStrain = Math.max(Math.abs(point.mat.epsCu), maxLayerStrain, point.mat.epsY, 0.5);
+  const strainScale = 62 / maxStrain;
+  const strainX = (strain) => strainAxisX + strain * strainScale;
+  const topStrain = point.mode === "pure tension" ? -point.mat.epsY : point.mat.epsCu;
+  const bottomStrain = point.x
+    ? point.mat.epsCu * (point.x - sec.height) / point.x
+    : point.mode === "pure tension" ? -point.mat.epsY : point.mat.epsCu;
+  const topStrainX = strainX(topStrain);
+  const bottomStrainX = strainX(bottomStrain);
+  const neutralY = point.x ? pad + Math.min(point.x, sec.height) * scaleY : null;
+  const blockHeight = Math.max(0, Math.min(point.a, sec.height)) * scaleY;
+  const blockMidY = pad + blockHeight / 2;
+  const blockRightX = blockX + 54;
+  const lambdaAxisX = blockRightX + 36;
+
+  const layerGuides = point.steelLayers.map((layer) => {
+    const y = pad + layer.z * scaleY;
+    const layerNumber = layer.label.replace("S", "");
+    const strainLabelX = Math.min(Math.max(strainX(layer.strain) + 10, strainPanelX), blockX - 96);
+    return `
+      <line class="layer-guide" x1="${pad}" y1="${y}" x2="${guideEndX}" y2="${y}" />
+      <text class="strain-layer-label" x="${strainLabelX}" y="${y - 9}">εs${layerNumber}</text>
+      ${forceArrow(forceAxisX, y, layer.force, layer.label)}
+    `;
+  }).join("");
+
   const bars = sec.layers.flatMap((layer) => {
     const barXs = layer.bars === 1
       ? [sec.width / 2]
@@ -380,13 +418,72 @@ function renderSection(sec) {
       `<circle cx="${pad + x * scaleX}" cy="${pad + layer.z * scaleY}" r="6" />`
     ));
   }).join("");
-  svg.innerHTML = `
-    <rect x="${pad}" y="${pad}" width="${w}" height="${h}" />
-    ${bars}
-    <line x1="${pad + w + 18}" y1="${pad}" x2="${pad + w + 18}" y2="${pad + h}" />
-    <text x="${pad + w + 28}" y="${pad + 14}">top</text>
-    <text x="${pad + w + 28}" y="${pad + h - 4}">bottom</text>
+
+  const neutralLine = neutralY === null ? "" : `
+    <line class="neutral-guide" x1="${pad + w}" y1="${neutralY}" x2="${guideEndX}" y2="${neutralY}" />
+    <line class="dimension-line" x1="${pad + w + 20}" y1="${pad}" x2="${pad + w + 20}" y2="${neutralY}" />
+    <path class="dimension-arrow" d="M ${pad + w + 20} ${pad} l -5 10 h 10 z" />
+    <path class="dimension-arrow" d="M ${pad + w + 20} ${neutralY} l -5 -10 h 10 z" />
+    <text class="dimension-label" x="${pad + w + 30}" y="${(pad + neutralY) / 2 + 4}">x</text>
   `;
+
+  const blockMarkup = point.mode === "pure tension" ? "" : `
+    <line class="stress-reference-line" x1="${blockX}" y1="${pad}" x2="${blockX}" y2="${bottomLineY}" />
+    <rect class="stress-block" x="${blockX}" y="${pad}" width="54" height="${blockHeight}" />
+    ${hatchLines(blockX, pad, 54, blockHeight)}
+    <text class="diagram-title" x="${blockX + 8}" y="${pad - 14}">fcd</text>
+    <line class="dimension-line" x1="${lambdaAxisX}" y1="${pad}" x2="${lambdaAxisX}" y2="${pad + blockHeight}" />
+    <path class="dimension-arrow" d="M ${lambdaAxisX} ${pad} l -6 12 h 12 z" />
+    <path class="dimension-arrow" d="M ${lambdaAxisX} ${pad + blockHeight} l -6 -12 h 12 z" />
+    <text class="dimension-label lambda-label" x="${lambdaAxisX + 18}" y="${blockMidY + 5}">λx</text>
+    ${forceArrow(forceAxisX, blockMidY, point.concreteForce, "Cc", true)}
+  `;
+
+  svg.innerHTML = `
+    <defs>
+      <marker id="forceArrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" />
+      </marker>
+    </defs>
+    <line class="boundary-guide" x1="${pad}" y1="${topLineY}" x2="${guideEndX}" y2="${topLineY}" />
+    <line class="boundary-guide" x1="${pad}" y1="${bottomLineY}" x2="${guideEndX}" y2="${bottomLineY}" />
+    <rect class="section-outline" x="${pad}" y="${pad}" width="${w}" height="${h}" />
+    ${layerGuides}
+    ${bars}
+    ${neutralLine}
+
+    <line class="strain-axis" x1="${strainAxisX}" y1="${pad}" x2="${strainAxisX}" y2="${pad + h}" />
+    <line class="strain-top-line" x1="${strainAxisX}" y1="${pad}" x2="${topStrainX}" y2="${pad}" />
+    <line class="strain-profile" x1="${topStrainX}" y1="${pad}" x2="${bottomStrainX}" y2="${pad + h}" />
+    <text class="diagram-title" x="${strainAxisX + 14}" y="${pad - 16}">εcu3</text>
+    <text class="diagram-caption" x="${strainPanelX}" y="${pad + h + 28}">strain compatibility</text>
+
+    ${blockMarkup}
+    <line class="force-axis" x1="${forceAxisX}" y1="${pad}" x2="${forceAxisX}" y2="${pad + h}" />
+    <text class="diagram-caption" x="${forceAxisX - 8}" y="${pad + h + 28}">forces</text>
+  `;
+}
+
+function forceArrow(axisX, y, force, label, isConcrete = false) {
+  const length = isConcrete ? 78 : 66;
+  const isCompression = force >= 0;
+  const x1 = isCompression ? axisX + length : axisX;
+  const x2 = isCompression ? axisX : axisX + length;
+  const textX = isCompression ? axisX + length * 0.42 : x2 + 12;
+  const layerNumber = label.replace("S", "");
+  const labelText = isConcrete ? "Cc" : `Fs${layerNumber}`;
+  return `
+    <line class="force-arrow ${isCompression ? "compression" : "tension"}" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" />
+    <text class="force-label" x="${textX}" y="${y - 8}">${labelText}</text>
+  `;
+}
+
+function hatchLines(x, y, width, height) {
+  const lines = [];
+  for (let offset = 6; offset < height; offset += 6) {
+    lines.push(`<line class="hatch-line" x1="${x}" y1="${y + offset}" x2="${x + width}" y2="${y + offset}" />`);
+  }
+  return lines.join("");
 }
 
 function renderLayersEditor() {
