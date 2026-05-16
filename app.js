@@ -410,6 +410,10 @@ function updateModeVisibility() {
 }
 
 function renderTable(point) {
+  const steelForce = point.steelLayers.reduce((sum, layer) => sum + layer.force, 0);
+  const steelMoment = point.steelLayers.reduce((sum, layer) => sum + layer.moment, 0);
+  const steelArea = point.steelLayers.reduce((sum, layer) => sum + layer.area, 0);
+  const steelBars = point.steelLayers.reduce((sum, layer) => sum + layer.bars, 0);
   const rows = point.steelLayers.map((layer) => `
     <tr>
       <td>${layer.label}</td>
@@ -423,10 +427,21 @@ function renderTable(point) {
       <td>${fmt(layer.moment, 1)}</td>
     </tr>
   `).join("");
+  const totalRow = `
+    <tr class="total-row">
+      <td>Total</td>
+      <td></td>
+      <td>${steelBars}</td>
+      <td>${fmt(steelArea, 1)}</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+  `;
 
-  $("steelBody").innerHTML = rows;
-  const steelForce = point.steelLayers.reduce((sum, layer) => sum + layer.force, 0);
-  const steelMoment = point.steelLayers.reduce((sum, layer) => sum + layer.moment, 0);
+  $("steelBody").innerHTML = rows + totalRow;
   $("concreteLine").textContent =
     `Cc = fcd * b * a = ${fmt(point.mat.fcd, 2)} * ${fmt(point.sec.width, 0)} * ${fmt(point.a, 1)} / 1000 = ${fmt(point.concreteForce, 1)} kN; ` +
     `sum Fs = ${fmt(steelForce, 1)} kN; ` +

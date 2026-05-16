@@ -568,6 +568,13 @@ th {
   background: #f8fafc;
 }
 
+.total-row td {
+  border-top: 2px solid #94a3b8;
+  background: #f8fafc;
+  color: #172033;
+  font-weight: 750;
+}
+
 .export-head {
   display: flex;
   align-items: center;
