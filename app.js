@@ -11,12 +11,72 @@ let demandRows = [
 ];
 
 const inputs = [
-  "width", "height", "barDiameter", "fck", "fyk", "gammaC", "gammaS", "etaCc", "kTc", "es",
+  "width", "height", "barDiameter", "cover", "tieDiameter", "fck", "fyk", "gammaC", "gammaS", "etaCc", "kTc", "es",
   "epsCu", "lambdaBlock", "neutralAxis", "bottomStrain", "curveSamples"
 ];
 
 function numberValue(id) {
   return Number($(id).value);
+}
+
+function isAutoLayerDepths() {
+  return $("autoLayerDepths").checked;
+}
+
+function autoDepthGeometry() {
+  const height = numberValue("height");
+  const cover = numberValue("cover");
+  const tieDiameter = numberValue("tieDiameter");
+  const barDiameter = numberValue("barDiameter");
+  const layerCount = rebarLayers.length;
+  const centerToCenter = height - 2 * cover - 2 * tieDiameter;
+  const clearMainBarSpan = centerToCenter - barDiameter;
+  const spacing = layerCount > 1 ? clearMainBarSpan / (layerCount - 1) : 0;
+  const firstDepth = cover + tieDiameter + barDiameter / 2;
+  return { height, cover, tieDiameter, barDiameter, layerCount, centerToCenter, clearMainBarSpan, spacing, firstDepth };
+}
+
+function autoDepthsAreValid(geometry = autoDepthGeometry()) {
+  return (
+    geometry.height > 0 &&
+    geometry.barDiameter > 0 &&
+    geometry.layerCount > 0 &&
+    geometry.centerToCenter >= geometry.barDiameter &&
+    (geometry.layerCount === 1 || geometry.spacing >= 0)
+  );
+}
+
+function applyAutoLayerDepths() {
+  const geometry = autoDepthGeometry();
+  if (!autoDepthsAreValid(geometry)) return;
+  rebarLayers = rebarLayers.map((layer, index) => ({
+    ...layer,
+    z: geometry.layerCount === 1 ? geometry.height / 2 : geometry.firstDepth + index * geometry.spacing
+  }));
+}
+
+function updateLayerDepthInputs() {
+  document.querySelectorAll(".layer-row").forEach((row) => {
+    const index = Number(row.dataset.layerIndex);
+    const depthInput = row.querySelector(".layer-depth");
+    if (depthInput && rebarLayers[index]) {
+      depthInput.value = fmt(rebarLayers[index].z, 2).replace(/\.?0+$/, "");
+    }
+  });
+}
+
+function renderSpacingSummary() {
+  const geometry = autoDepthGeometry();
+  if (!autoDepthsAreValid(geometry)) {
+    $("spacingSummary").textContent = "Check h, cover, stirrup diameter, and bar diameter. Available depth is too small.";
+    return;
+  }
+  const depths = rebarLayers.map((layer) => `${fmt(layer.z, 1)} mm`).join(", ");
+  $("spacingSummary").textContent =
+    `CC = h - 2c - 2phi = ${fmt(geometry.centerToCenter, 1)} mm; ` +
+    `k = CC - phi_bar = ${fmt(geometry.clearMainBarSpan, 1)} mm; ` +
+    `s = ${geometry.layerCount > 1 ? fmt(geometry.spacing, 1) : "-"} mm; ` +
+    `z = ${depths}`;
 }
 
 function material() {
@@ -174,6 +234,10 @@ function fmt(value, digits = 1) {
 }
 
 function update() {
+  if (isAutoLayerDepths()) {
+    applyAutoLayerDepths();
+    updateLayerDepthInputs();
+  }
   const sec = section();
   const mat = material();
   const point = activePoint(sec, mat);
@@ -203,6 +267,7 @@ function update() {
   renderChart(curve, point, demands, demandChecks);
   renderCsv(curve);
   updateModeVisibility();
+  renderSpacingSummary();
 }
 
 function demandPoints() {
@@ -315,6 +380,9 @@ function updateDemandStatuses(checks) {
 
 function validate(sec, mat, point) {
   const messages = [];
+  if (isAutoLayerDepths() && !autoDepthsAreValid()) {
+    messages.push("Auto layer spacing is invalid. Increase h or reduce cover, stirrup diameter, or bar diameter.");
+  }
   if (sec.layers.length === 0) {
     messages.push("Add at least one rebar layer.");
   }
@@ -374,8 +442,6 @@ function renderSection(sec, point) {
   const scaleY = h / sec.height;
   const scaleX = w / sec.width;
   const sideInset = Math.min(50, sec.width * 0.22);
-  const barDiameterLabel = Number.isInteger(sec.barDiameter) ? sec.barDiameter : fmt(sec.barDiameter, 1);
-  const sectionLabelX = pad + w + 18;
   const strainAxisX = 382;
   const strainPanelX = 308;
   const blockX = 568;
@@ -491,7 +557,7 @@ function renderLayersEditor() {
     <div class="layer-row" data-layer-index="${index}">
       <div class="layer-title">Layer ${index + 1}</div>
       <label>Depth z from top (mm)
-        <input class="layer-depth" type="number" value="${layer.z}" min="0" step="1">
+        <input class="layer-depth" type="number" value="${fmt(layer.z, 2).replace(/\.?0+$/, "")}" min="0" step="1" ${isAutoLayerDepths() ? "disabled" : ""}>
       </label>
       <label>Number of bars
         <input class="layer-bars" type="number" value="${layer.bars}" min="1" step="1">
@@ -720,7 +786,13 @@ function renderCsv(curve) {
 
 inputs.forEach((id) => $(id).addEventListener("input", update));
 document.querySelectorAll("input[name='pointMode']").forEach((input) => input.addEventListener("change", update));
+$("autoLayerDepths").addEventListener("change", () => {
+  if (isAutoLayerDepths()) applyAutoLayerDepths();
+  renderLayersEditor();
+  update();
+});
 $("layersList").addEventListener("input", (event) => {
+  if (isAutoLayerDepths() && event.target.classList.contains("layer-depth")) return;
   const row = event.target.closest(".layer-row");
   if (!row) return;
   const index = Number(row.dataset.layerIndex);
@@ -736,14 +808,14 @@ $("layersList").addEventListener("click", (event) => {
   if (!event.target.classList.contains("remove-layer") || rebarLayers.length === 1) return;
   const row = event.target.closest(".layer-row");
   rebarLayers.splice(Number(row.dataset.layerIndex), 1);
+  if (isAutoLayerDepths()) applyAutoLayerDepths();
   renderLayersEditor();
   update();
 });
 $("addLayerBtn").addEventListener("click", () => {
-  const secHeight = numberValue("height");
-  const lastDepth = rebarLayers.length ? Math.max(...rebarLayers.map((layer) => Number(layer.z))) : 50;
-  const nextDepth = Math.min(secHeight - 50, lastDepth + 100);
-  rebarLayers.push({ z: Math.max(0, nextDepth), bars: 2 });
+  const lastDepth = rebarLayers.length ? Math.max(...rebarLayers.map((layer) => Number(layer.z))) : numberValue("height") / 2;
+  rebarLayers.push({ z: lastDepth, bars: 2 });
+  if (isAutoLayerDepths()) applyAutoLayerDepths();
   renderLayersEditor();
   update();
 });

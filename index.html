@@ -25,6 +25,15 @@
           <label>Width b (mm)<input id="width" type="number" value="300" min="1"></label>
           <label>Height h (mm)<input id="height" type="number" value="500" min="1"></label>
           <label>Bar diameter (mm)<input id="barDiameter" type="number" value="20" min="1"></label>
+          <label>Cover c (mm)<input id="cover" type="number" value="30" min="0" step="1"></label>
+          <label>Stirrup diameter phi (mm)<input id="tieDiameter" type="number" value="10" min="0" step="1"></label>
+        </div>
+        <div class="auto-depth-card">
+          <label class="check-row">
+            <input id="autoLayerDepths" type="checkbox" checked>
+            Auto calculate layer depths
+          </label>
+          <div id="spacingSummary" class="spacing-summary">-</div>
         </div>
         <div class="layer-head">
           <h3>Rebar layers</h3>
